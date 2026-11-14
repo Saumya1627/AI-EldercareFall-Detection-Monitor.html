@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Eldercare — Fall Detection Monitor</title>
+<style>
+:root{color-scheme:dark;--bg:#08090a;--p:#101214;--ln:#24282b;--tx:#e6e9e9;--mu:#7f8789;--g:#3ddc84;--y:#f5c542;--o:#ff8a3d;--r:#ff4d4d;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--ln);position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+.brand{font:600 14px var(--mono);letter-spacing:.04em;margin-right:8px}
+nav{display:flex;gap:2px;flex-wrap:wrap;flex:1}
+nav button{background:none;border:0;color:var(--mu);font:12px var(--mono);padding:6px 9px;cursor:pointer;border-bottom:2px solid transparent}
+nav button.on{color:var(--tx);border-color:var(--tx)}
+button,select,input{font:12px var(--mono);color:var(--tx);background:#16191b;border:1px solid var(--ln);padding:6px 9px;border-radius:2px}
+button{cursor:pointer}button:hover{border-color:var(--mu)}button:focus-visible,select:focus-visible,input:focus-visible,nav button:focus-visible{outline:2px solid var(--tx);outline-offset:1px}
+button.pri{background:var(--tx);color:#000}button.dng{border-color:var(--r);color:var(--r)}
+.pill{font:600 12px var(--mono);padding:4px 10px;border:1px solid currentColor;border-radius:2px}
+main{padding:12px 14px;max-width:1500px;margin:0 auto}
+.mg{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(290px,1fr);gap:12px}
+@media(max-width:900px){.mg{grid-template-columns:1fr}}
+.pn{background:var(--p);border:1px solid var(--ln);padding:10px 12px;margin-bottom:12px}
+.pn h3{margin:0 0 8px;font:11px var(--mono);color:var(--mu);letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+canvas{width:100%;display:block;background:#000;border:1px solid var(--ln)}
+.mono{font-family:var(--mono)}.mu{color:var(--mu)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font:12px var(--mono)}.kv span:nth-child(odd){color:var(--mu)}
+.bar{display:grid;grid-template-columns:120px 1fr 52px;gap:8px;align-items:center;font:12px var(--mono);margin:4px 0}
+.bar i{display:block;height:6px;background:#1c2023}.bar b{display:block;height:6px;background:var(--mu)}
+.bar.top{color:var(--tx)}.bar.top b{background:var(--g)}
+.big{font:14px/1.5 var(--mono);text-transform:uppercase}
+.card{border-left:3px solid var(--mu);background:var(--p);padding:10px 12px;margin-bottom:10px;border-top:1px solid var(--ln);border-right:1px solid var(--ln);border-bottom:1px solid var(--ln)}
+.tl{font:12px var(--mono);color:var(--mu);margin:6px 0 0}
+table{border-collapse:collapse;width:100%;font:12px var(--mono)}td,th{border-bottom:1px solid var(--ln);padding:5px 6px;text-align:left}
+label{display:grid;grid-template-columns:200px 1fr;gap:8px;align-items:center;margin:6px 0;font:12px var(--mono)}
+@media(max-width:600px){label{grid-template-columns:1fr}.bar{grid-template-columns:90px 1fr 48px}}
+.v{display:none}.v.on{display:block}
+.alertbar{border:1px solid var(--ln);padding:8px 12px;margin-bottom:12px;font:12px var(--mono);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+@media(prefers-reduced-motion:no-preference){.pulse{animation:pl 1.2s infinite}@keyframes pl{50%{opacity:.45}}}
+</style></head><body>
+<header>
+<span class="brand">AI ELDERCARE</span>
+<nav id="nav"></nav>
+<span id="lvl" class="pill">GREEN</span>
+<span id="tbadge" class="mu mono" style="font-size:11px"></span><button id="pauseB" title="Pause all monitoring">PAUSE MONITORING</button>
+</header>
+<main>
+<div id="alertbar" class="alertbar"></div>
+<section id="v-mon" class="v on"><div class="mg">
+ <div>
+  <div class="pn">
+   <h3 id="camTitle">CAM 01 · LIVING ROOM · DEMO</h3>
+   <canvas id="cv" width="640" height="360" aria-label="Camera view"></canvas>
+   <video id="vid" playsinline muted loop style="display:none"></video>
+   <div class="row">
+    <select id="src" aria-label="Source"><option value="demo">DEMO SCENARIO</option><option value="upload">UPLOAD VIDEO</option><option value="cam">WEBCAM</option></select>
+    <select id="scn" aria-label="Scenario"></select>
+    <button id="playB" class="pri">PLAY</button><button id="rstB">RESTART</button>
+    <input type="file" id="file" accept="video/*" style="display:none">
+    <span id="srcMsg" class="mu mono"></span>
+   </div>
+   <div id="clock" class="mono mu" style="margin-top:6px"></div>
+  </div>
+  <div class="pn"><h3>AI movement analysis</h3><div id="ana" class="big"></div>
+   <div id="stats" class="kv" style="margin-top:10px"></div></div>
+  <div class="pn"><h3>Rolling frame buffer</h3><canvas id="bs" width="640" height="26" style="height:26px"></canvas><div id="bsT" class="mono mu" style="margin-top:4px"></div></div>
+  <div id="liveX" style="display:none">
+   <div class="pn"><h3>Jev structured output (simulated)</h3><pre id="json" class="mono" style="margin:0;white-space:pre-wrap;color:var(--mu)"></pre></div>
+   <div class="pn"><h3>Prompt sent to Jev when connected</h3><pre id="prm" class="mono" style="margin:0;white-space:pre-wrap;color:var(--mu);font-size:11px"></pre></div>
+   <div class="pn"><h3>Event console</h3><div id="log" class="mono" style="max-height:220px;overflow:auto;font-size:12px"></div></div>
+  </div>
+ </div>
+ <div>
+  <div class="pn"><h3>Activity classification</h3><div id="cls"></div></div>
+  <div class="pn"><h3>Fall event classification</h3><div id="evp" class="kv"></div></div>
+  <div class="pn"><h3>Movement / posture</h3><div id="mov" class="kv"></div></div>
+  <div class="pn"><h3>Fall state machine</h3><div id="fsm" class="mono" style="font-size:12px"></div></div>
+  <div class="pn"><h3>Voice check-in</h3><div id="voice" class="mono" style="font-size:12px"></div>
+   <div class="row"><button id="vOk">RESIDENT: “I’M FINE”</button><button id="vHelp">RESIDENT: “I NEED HELP”</button><button id="vMan" class="dng">REQUEST ASSISTANCE</button></div></div>
+  <div class="pn"><h3>Secondary vision model</h3><div id="sec" class="mono" style="font-size:12px"></div></div>
+  <div class="pn"><h3>Model status</h3><div id="mdl" class="kv"></div></div>
+ </div>
+</div></section>
+<section id="v-act" class="v"></section><section id="v-inc" class="v"></section><section id="v-cg" class="v"></section><section id="v-rep" class="v"></section><section id="v-set" class="v"></section>
+<p class="mu" style="font-size:11px;margin-top:18px">Fall detection is probabilistic. This system does not diagnose, replace caregivers, or contact emergency services. Notifications in this prototype are simulated. Scene and Jev outputs are DEMO unless labelled otherwise.</p>
+</main>
+<script>
+const $=s=>document.querySelector(s),pad=(n,l=2)=>String(n).padStart(l,'0');
+const clk=()=>new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const COL={GREEN:'var(--g)',YELLOW:'var(--y)',ORANGE:'var(--o)',RED:'var(--r)'};
+const CFG={hz:2,buf:20,lat:1.8,voice:true,tts:true,mic:false,timeout:8,sound:false,inact:60,jev:'SIMULATED'};
+const CG={name:'Primary caregiver',phone:'+971 50 000 0000',email:'caregiver@example.com',esc:'2'};
+
+/* ---------- Rolling frame buffer ---------- */
+class FrameBuffer{constructor(s){this.sec=s;this.f=[]}
+ push(fr){this.f.push(fr);this.trim(fr.t)}
+ trim(now){while(this.f.length&&this.f[0].t<now-this.sec)this.f.shift()}
+ get n(){return this.f.length}
+ get dur(){return this.n?this.f[this.n-1].t-this.f[0].t:0}}
+
+/* ---------- Heuristic activity classifier (not calibrated) ---------- */
+/* Activity = posture class only. Fuzzy memberships over height ratio and body tilt cover every combination, so there is no catch-all class. Fall judgements are made separately by eventOf() on the movement sequence. */
+function classify(f){const cl=x=>Math.max(0,Math.min(1,x)),hi=cl((f.hip-.6)/.3),lo=1-hi,tl=cl((f.ang-30)/40),up=1-tl,sofa=f.ctx==='sofa';
+ const r={'WALKING':hi*up*(f.moving?1:.2)+.01,'STANDING':hi*up*(f.moving?.25:1)+.01,'SITTING':lo*up*(f.hip>.4?1:.4)+.01,
+ 'CROUCHING / BENDING':lo*up*(f.hip<=.4?1:.2)+hi*tl*.7+.01,'LYING DOWN':tl*lo*(sofa?1:.05)+.01,'FLOOR LEVEL':tl*lo*(sofa?.05:1)+.01};
+ const sum=Object.values(r).reduce((a,b)=>a+b,0),sc={};let top='',m=-1;
+ for(const k in r){sc[k]=r[k]/sum*100;if(sc[k]>m){m=sc[k];top=k}}return{scores:sc,top}}
+
+/* ---------- Voice response classification ---------- */
+function classifyVoice(t){t=(t||'').toLowerCase().replace(/[’]/g,"'").trim();if(!t)return'NO_RESPONSE';
+ if(/(don't|do not|no)( need| want)? (any )?(help|assist)/.test(t))return'CONFIRMED_OKAY';
+ if(/not (ok|okay|fine|alright)|need (help|assist|someone|a doctor)|help me|^help|please call|call (someone|an? ambulance|my)|hurt|pain|can't (get up|move)/.test(t))return'NEEDS_ASSISTANCE';
+ if(/\b(fine|ok|okay|alright|all right|good)\b|just (sat|sit|lay|lie|slipped)/.test(t))return'CONFIRMED_OKAY';
+ return'UNCLEAR'}
+
+/* ---------- Fall event state machine ---------- */
+class Fsm{constructor(o){this.o=Object.assign({timeout:8,voice:true,sec:2.5},o);this.reset()}
+ reset(){this.s='NORMAL';this.ts=0;this.h=[];this.lv='GREEN';this.retry=0;this.rec=false;this.tum=false}
+ to(s,t,lv){this.s=s;this.ts=t;if(lv)this.lv=lv}
+ notify(t,A,why,lv,c){this.to('NOTIFIED',t,lv);A.push({a:'notify',why,lv,resp:c||null});return A}
+ recovered(t,A){this.rec=true;this.to('CLASSIFIED',t,'YELLOW');A.push({a:'classify',cls:'Fall with recovery',lv:'YELLOW'});A.push({a:'recovery'})}
+ respond(c,t,A=[]){
+  if(c==='CONFIRMED_OKAY'){this.to('CLASSIFIED',t,'YELLOW');A.push({a:'classify',cls:'Fall reported OK by resident',lv:'YELLOW'})}
+  else if(c==='NEEDS_ASSISTANCE')this.notify(t,A,'Resident requested assistance','RED',c);
+  else if(c==='UNCLEAR'){if(this.retry++<1){this.to('VOICE',t);A.push({a:'ask',retry:true})}else this.notify(t,A,'Unclear response after retry','ORANGE',c)}
+  else this.notify(t,A,'No response; resident still at floor level (not assumed unconscious or safe)','RED',c);
+  return A}
+ resolve(){if(this.s==='NOTIFIED'||this.s==='CLASSIFIED'){this.s='NORMAL';this.lv='GREEN'}}
+ step(f,t){const A=[];this.h.push({t,hip:f.hip});while(this.h[0].t<t-1.5)this.h.shift();if(f.q<.3)return A;
+  const drop=Math.max(...this.h.map(x=>x.hip))-f.hip,up=f.hip>.8&&(!this.tum||(t-this.ts>1&&(f.dy||0)<.1)),s=this.s,safe=f.ctx==='sofa'||f.ctx==='chair';
+  if(s==='NORMAL'){
+   if((drop>.5&&!safe&&f.hip<.6&&(f.ctx!=='unknown'||f.ang>=45))||(f.tumble&&!safe)){this.tum=!!f.tumble;this.to('POSSIBLE_FALL',t,'ORANGE');this.retry=0;this.rec=false;A.push({a:'open',cls:'Possible fall',why:f.tumble?'Fast downward movement of body mass (tumble)':'Rapid descent to floor level',fall:true})}
+   else if(f.hip<(f.ctx==='unknown'?.55:.3)&&(f.ctx==='floor'||f.ctx==='unknown')&&f.ang>=45){this.to('UNUSUAL',t,'YELLOW');this.rec=false;A.push({a:'open',cls:'Unusual movement',why:'Gradual descent to floor level'})}
+  }else if(s==='UNUSUAL'){
+   if(up){this.to('NORMAL',t,'GREEN');A.push({a:'close',why:'Resident upright again'})}
+   else if(t-this.ts>2){this.to('SECONDARY',t,'ORANGE');A.push({a:'secondary'})}
+  }else if(s==='POSSIBLE_FALL'){
+   if(up)this.recovered(t,A);else if(t-this.ts>.5){this.to('SECONDARY',t);A.push({a:'secondary'})}
+  }else if(s==='SECONDARY'){
+   if(up)this.recovered(t,A);
+   else if(t-this.ts>this.o.sec){if(this.o.voice){this.to('VOICE',t);A.push({a:'ask'})}else this.notify(t,A,'Voice check-in disabled; floor-level posture persists','ORANGE')}
+  }else if(s==='VOICE'){
+   if(up)this.recovered(t,A);else if(t-this.ts>this.o.timeout)this.respond('NO_RESPONSE',t,A);
+  }else if(s==='CLASSIFIED'||s==='NOTIFIED'){
+   if(up&&!this.rec){this.rec=true;A.push({a:'recovery'})}
+   if(up&&this.rec&&t-this.ts>5){this.to('NORMAL',t,'GREEN');A.push({a:s==='NOTIFIED'?'rearm':'close',why:'Recovered; event closed'})}
+  }
+  return A}}
+
+/* ---------- Scenarios: keyframes [t,hip,ang,x,walk,ctx]; reply = scripted resident speech (SIMULATED) ---------- */
+const WK=[[0,1,0,60,1,'floor']];
+const SC={
+ walk:{n:'1 · NORMAL WALKING',d:36,k:[[0,1,0,60,1,'floor'],[30,1,0,540,1,'floor'],[36,1,0,540,0,'floor']]},
+ sit:{n:'2 · SITTING DOWN',d:40,k:[[0,1,0,60,1,'floor'],[8,1,0,310,1,'floor'],[9,1,0,320,0,'chair'],[10.5,.55,0,320,0,'chair'],[40,.55,0,320,0,'chair']]},
+ lie:{n:'3 · INTENTIONALLY LYING DOWN',d:40,k:[[0,1,0,60,1,'floor'],[9,1,0,500,1,'floor'],[10,1,0,520,0,'sofa'],[14,.42,88,520,0,'sofa'],[40,.42,88,520,0,'sofa']]},
+ fall:{n:'4 · POSSIBLE FALL (ASKS FOR HELP)',d:48,k:[[0,1,0,60,1,'floor'],[8,1,0,300,1,'floor'],[8.2,1,6,310,0,'floor'],[8.7,.12,88,330,0,'floor'],[60,.12,88,330,0,'floor']],reply:{d:3,t:'I need help, please call someone'}},
+ rec:{n:'5 · FALL FOLLOWED BY RECOVERY',d:45,k:[[0,1,0,60,1,'floor'],[8,1,0,300,1,'floor'],[8.2,1,6,310,0,'floor'],[8.7,.12,88,330,0,'floor'],[14,.12,88,330,0,'floor'],[17,1,0,330,0,'floor'],[24,1,0,330,0,'floor'],[26,1,0,500,1,'floor'],[45,1,0,520,0,'floor']],reply:{d:6,t:'I’m fine, I just slipped'}},
+ nores:{n:'6 · FALL, NO RESPONSE',d:48,k:[[0,1,0,60,1,'floor'],[8,1,0,300,1,'floor'],[8.2,1,6,310,0,'floor'],[8.7,.12,88,330,0,'floor'],[60,.12,88,330,0,'floor']],reply:null},
+ slow:{n:'7 · SLOW SIT TO FLOOR (AMBIGUOUS)',d:48,k:[[0,1,0,60,1,'floor'],[8,1,0,300,1,'floor'],[9,.9,0,300,0,'floor'],[16,.12,60,320,0,'floor'],[60,.12,85,320,0,'floor']],reply:{d:3,t:'I’m fine, I just sat down'}}};
+const lerp=(a,b,u)=>a+(b-a)*u;
+function pose(sc,t){const k=sc.k;let i=0;while(i<k.length-2&&t>=k[i+1][0])i++;const a=k[i],b=k[i+1],u=Math.max(0,Math.min(1,(t-a[0])/((b[0]-a[0])||1)));
+ return{hip:lerp(a[1],b[1],u),ang:lerp(a[2],b[2],u),x:lerp(a[3],b[3],u),walk:!!a[4],ctx:a[5]}}
+
+/* ---------- State ---------- */
+const BUF=new FrameBuffer(20),FSM=new Fsm(CFG);
+const S={cyh:[],pg:null,evSeen:new Set(),ev:'NORMAL ACTIVITY',fallFlag:false,fallT:0,evLast:null,q:1,view:'mon',vt:0,run:false,paused:false,src:'demo',sc:'walk',lastS:-9,frames:0,cost:0,fly:[],lastReady:0,aT:0,lat:0,sm:{},top:'—',conf:0,json:null,desc:'AWAITING FRAMES',pseq:[],post:'—',prev:'—',trans:'—',tStable:0,lastMove:0,lastT:0,incs:[],inc:null,notes:[],cnt:{walk:0,sit:0,stand:0,fall:0,inact:0},pt:{},log:[],sec:{st:'IDLE'},voice:{st:'IDLE'},ah:[],hipPrev:1,p:null,wasWalk:false,inactFired:false,errs:''};
+const lg=m=>{S.log.unshift([clk(),m]);S.log.length=Math.min(S.log.length,80)};
+
+/* ---------- Jev adapter (replaceable). SIMULATED: no Jev API is invented here. ---------- */
+const JEV_PROMPT='You receive time-stamped frames plus a body track (height ratio, tilt, descent rate) from a rolling 20 s buffer. Analyse movement over time, never a single frame. Report: starting posture, movement direction, speed of descent, whether the descent looks controlled, final posture, whether an impact-like stop is visible, whether the person tries to get up, whether they stay down. Do not treat every movement toward the floor as a fall (sitting, kneeling, lying on a sofa are normal). Use INSUFFICIENT_VISUAL_EVIDENCE only if the person is too obscured to judge, and report evidence_quality honestly. Return JSON only: {activity, fall_classification, body_position, recovery_status, descent:{peak_rate, controlled, impact_like}, model_confidence, evidence_quality, reasoning_summary}';
+const EV=['NORMAL ACTIVITY','CONTROLLED DESCENT','POSSIBLE LOSS OF BALANCE','POTENTIAL FALL','FALL WITH RECOVERY','FALL WITHOUT RECOVERY DETECTED','INSUFFICIENT VISUAL EVIDENCE'];
+/* Movement-sequence features over the analyzed window: peak descent rate (body-heights/s), peak tilt rate (deg/s), total drop. */
+function track(ah){let peak=0,tr=0;for(let i=1;i<ah.length;i++){const dt=Math.max(.05,ah[i].t-ah[i-1].t);peak=Math.max(peak,(ah[i-1].h-ah[i].h)/dt);tr=Math.max(tr,Math.abs(ah[i].a-ah[i-1].a)/dt)}return{peak,tr,drop:ah.length?Math.max(...ah.map(x=>x.h))-ah[ah.length-1].h:0}}
+/* Event class from the sequence, not one frame: fast descent ending low = fall; slow descent = controlled; tilt jump without reaching the floor = loss of balance. */
+function eventOf(f){const k=track(S.ah),safe=f.ctx==='sofa'||f.ctx==='chair',q=f.q===undefined?1:f.q;
+ if(S.fallFlag)return FSM.rec?EV[4]:(f.t-S.fallT>=3&&f.hip<.6?EV[5]:EV[3]);
+ if(q<.3)return EV[6];
+ if(f.tumble&&!safe)return EV[3];
+ let e=EV[0];
+ if(k.drop>.25&&f.hip<.75)e=k.peak<.5||safe?EV[1]:(f.hip<.6&&(f.ctx!=='unknown'||f.ang>=45)?EV[3]:EV[2]);
+ else if(k.drop>.12&&k.tr>=40&&f.ang>=30&&q>=.5&&!safe)e=EV[2];
+ else if((f.dy||0)>=.12&&(f.m||0)>=.04&&q>=.5&&!safe)e=EV[2];
+ if(e!==EV[0])S.evLast=e;else if(S.evLast&&f.hip<.4&&!safe)e=S.evLast;
+ if(f.hip>.8)S.evLast=null;
+ return e}
+/* Secondary analysis reads the RAW buffer (not Jev's answer): time from upright to floor, peak rate, rise attempts. */
+function secondary(){const b=BUF.f,l=b[b.length-1]||{hip:1,ang:0,q:1};let up=-1,fl=-1,mn=9,att=false,pk=0;
+ for(let i=0;i<b.length;i++){if(fl<0&&b[i].hip>.8)up=i;if(up>=0&&fl<0&&b[i].hip<.5)fl=i;if(fl>=0){mn=Math.min(mn,b[i].hip);if(b[i].hip>mn+.15)att=true}if(i&&b[i-1].hip>b[i].hip)pk=Math.max(pk,(b[i-1].hip-b[i].hip)/Math.max(.05,b[i].t-b[i-1].t))}
+ const dt=fl>=0&&up>=0?b[fl].t-b[up].t:null,fast=pk>=.5;
+ return{st:'READY',pos:postureOf(l),seq:'upright → '+(dt===null?'no floor transition in buffer':'floor level in '+dt.toFixed(1)+' s'),interp:dt===null?'Descent not fully visible in buffer; human check advised':fast?'Fast descent ended at floor level: fall pattern'+(att?'; person attempting to rise':'; no rise attempt yet'):'Slow controlled lowering: likely intentional',conf:+Math.min(.95,.5+.4*(l.q===undefined?1:l.q)).toFixed(2),human:dt===null||!fast}}
+const jev={analyze(f,posture){const e=eventOf(f),k=track(S.ah),c=classify(f);S.ev=e;S.evSeen.add(e);const cf=e===EV[0]?c.scores[c.top]/100:.6+.35*Math.min(1,Math.abs(k.peak-.5)/.5);
+ return{activity:c.top.toLowerCase(),fall_classification:e.toLowerCase().replace(/ /g,'_'),body_position:posture.toLowerCase(),recovery_status:S.fallFlag?(FSM.rec?'recovered':'on_floor'):'n/a',descent:{peak_rate:+k.peak.toFixed(2),controlled:k.peak<.5,impact_like:k.peak>=.5},model_confidence:+cf.toFixed(2),evidence_quality:+(f.q===undefined?1:f.q).toFixed(2),reasoning_summary:'DEMO heuristic over the body track; not a Jev result',_simulated:true}}};
+
+/* ---------- Real-video motion analysis (frame differencing; genuine CV, crude) ---------- */
+const oc=document.createElement('canvas');oc.width=96;oc.height=54;const ox=oc.getContext('2d',{willReadFrequently:true});let lastBox=null;
+let GW=96,GH=54;function gray(){const vw=vid.videoWidth||96,vh=vid.videoHeight||54,s=96/Math.max(vw,vh);GW=Math.max(8,Math.round(vw*s));GH=Math.max(8,Math.round(vh*s));if(oc.width!==GW)oc.width=GW;if(oc.height!==GH)oc.height=GH;ox.drawImage(vid,0,0,GW,GH);const d=ox.getImageData(0,0,GW,GH).data,g=new Float32Array(GW*GH);for(let i=0;i<g.length;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return g}
+/* Scene-cut detector: Pearson correlation between consecutive samples. Same scene stays high even with fast motion; a cut drops it near zero. */
+function sameScene(a,b){if(!a||a.length!==b.length)return false;const n=a.length;let ma=0,mb=0;for(let i=0;i<n;i++){ma+=a[i];mb+=b[i]}ma/=n;mb/=n;let ab=0,aa=0,bb=0;for(let i=0;i<n;i++){const x=a[i]-ma,y=b[i]-mb;ab+=x*y;aa+=x*x;bb+=y*y}return ab/Math.sqrt(aa*bb+1e-6)>.4}
+/* Background-subtraction tracker: foreground = pixels differing from a slow-adapting background. Height is measured against the tallest box in the last 10 s, so a person who drops shrinks hip toward 0 and turns wide (ang ~80). Multiple people merge into one box. */
+class MotionTracker{constructor(){this.reset()}
+ reset(){this.bg=null;this.prev=null;this.hs=[];this.box=null}
+ update(g,t,freeze,w=96){if(!this.bg){this.bg=Float32Array.from(g);this.prev=Float32Array.from(g);this.p2=Float32Array.from(g);return{n:0,moving:false,box:null,found:false}}
+  const xs=[],ys=[];let mv=0;
+  for(let i=0;i<g.length;i++){if(Math.abs(g[i]-this.p2[i])>25||(freeze&&Math.abs(g[i]-this.bg[i])>30)){xs.push(i%w);ys.push((i/w)|0)}if(Math.abs(g[i]-this.prev[i])>25)mv++;if(!freeze)this.bg[i]+=(g[i]-this.bg[i])*.05}
+  this.p2=this.prev;this.prev=Float32Array.from(g);
+  if(xs.length<30)return{n:xs.length,moving:mv>40,box:this.box,found:false};
+  const N=xs.length;let mx=0,my=0;for(let i=0;i<N;i++){mx+=xs[i];my+=ys[i]}mx/=N;my/=N;let sxx=0,syy=0,sxy=0;for(let i=0;i<N;i++){const dx=xs[i]-mx,dy=ys[i]-my;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy}sxx/=N;syy/=N;sxy/=N;
+  const tr=sxx+syy,ds=Math.sqrt(Math.max(0,tr*tr/4-(sxx*syy-sxy*sxy))),pc={e:Math.sqrt((tr/2+ds)/Math.max(1e-6,tr/2-ds)),tilt:90-Math.abs(.5*Math.atan2(2*sxy,sxx-syy)*180/Math.PI)};
+  xs.sort((a,b)=>a-b);ys.sort((a,b)=>a-b);const q=(a,p)=>a[Math.min(a.length-1,Math.floor(a.length*p))];
+  const box=[q(xs,.04),q(ys,.04),q(xs,.96),q(ys,.96)];this.box=box;
+  const bw=box[2]-box[0]+1,bh=box[3]-box[1]+1;if(!freeze||!this.hs.length){this.hs.push({t,h:bh});while(this.hs[0].t<t-45)this.hs.shift()}
+  const ref=Math.max(8,...this.hs.map(x=>x.h)),asp=bw/bh;
+  const ang=pc.e>1.25?pc.tilt:(asp>1.1?75:asp>.8?40:10);return{n:xs.length,moving:mv>40,box,found:true,hip:Math.min(1,bh/ref),ang,cy:my/(g.length/w),m:xs.length/g.length,q:Math.min(1,xs.length/150)*(pc.e>1.25?1:.7)}}}
+const MT=new MotionTracker();
+
+/* ---------- Drawing ---------- */
+const cv=$('#cv'),cx=cv.getContext('2d'),vid=$('#vid');
+const rot=(v,t)=>[v[0]*Math.cos(t)-v[1]*Math.sin(t),v[0]*Math.sin(t)+v[1]*Math.cos(t)];
+function drawScene(p,t){const c=cx,fy=300,u=110;c.fillStyle='#0b0d0e';c.fillRect(0,0,640,360);
+ c.strokeStyle='#1f2427';c.lineWidth=1;c.beginPath();c.moveTo(0,fy);c.lineTo(640,fy);c.stroke();
+ c.setLineDash([4,4]);c.strokeStyle='#2c3a33';c.strokeRect(30,50,570,255);c.setLineDash([]);
+ c.fillStyle='#171b1d';c.fillRect(470,fy-50,140,50);c.fillRect(600,fy-85,10,35);c.fillRect(300,fy-60,50,4);c.fillRect(340,fy-110,6,54);
+ c.fillStyle='#4a5256';c.font='10px monospace';c.fillText('SOFA',520,fy+14);c.fillText('CHAIR',308,fy+14);c.fillText('MONITORING ZONE',36,64);
+ const hx=p.x,hy=fy-p.hip*u,a=p.ang*Math.PI/180,up=[Math.sin(a),-Math.cos(a)],sh=[hx+up[0]*48,hy+up[1]*48],hd=[hx+up[0]*72,hy+up[1]*72],pts=[[hx,hy],sh,hd],sw=p.walk?Math.sin(t*8)*.5:0;
+ c.strokeStyle='#cfd5d6';c.lineWidth=4;c.lineCap='round';
+ const ln=(a,b)=>{c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();pts.push(b)};
+ ln([hx,hy],sh);
+ const seated=p.hip<.8&&p.ang<45;
+ if(seated){const kn=[hx+38,hy];ln([hx,hy],kn);ln(kn,[kn[0],fy])}
+ else for(const s of[-1,1]){const l=rot([-up[0]*60,-up[1]*60],s*sw);ln([hx,hy],[hx+l[0],hy+l[1]])}
+ for(const s of[-1,1]){const l=rot([-up[0]*38,-up[1]*38],s*(.25+sw*.8));ln(sh,[sh[0]+l[0],sh[1]+l[1]])}
+ c.beginPath();c.arc(hd[0],hd[1],9,0,7);c.stroke();
+ const xs=pts.map(q=>q[0]),ys=pts.map(q=>q[1]);return[Math.min(...xs)-12,Math.min(...ys)-14,Math.max(...xs)+12,Math.max(...ys)+8]}
+function overlay(box,real){const c=cx,col={GREEN:'#3ddc84',YELLOW:'#f5c542',ORANGE:'#ff8a3d',RED:'#ff4d4d'}[FSM.lv];
+ if(box){c.strokeStyle=col;c.lineWidth=1.5;c.strokeRect(box[0],box[1],box[2]-box[0],box[3]-box[1]);c.fillStyle=col;c.font='11px monospace';c.fillText(S.ev!==EV[0]?S.ev:S.top,box[0],Math.max(12,box[1]-4))}
+ c.fillStyle='#8a9193';c.font='11px monospace';c.fillText((real?'LIVE INPUT · LOCAL MOTION HEURISTIC':'SYNTHETIC SCENE · DEMO')+' · '+clk(),10,350);
+ c.fillStyle=S.run&&!S.paused?'#ff4d4d':'#555';c.beginPath();c.arc(14,16,4,0,7);c.fill();c.fillStyle='#e6e9e9';c.fillText(S.paused?'MONITORING PAUSED':S.run?'REC BUFFER · SAMPLING':'IDLE',24,20);
+ if(S.paused){c.fillStyle='rgba(0,0,0,.7)';c.fillRect(0,0,640,360);c.fillStyle='#e6e9e9';c.font='16px monospace';c.fillText('MONITORING PAUSED — NO FRAMES SAMPLED',140,184)}}
+
+/* ---------- Sampling, Jev delivery, actions ---------- */
+function postureOf(f){return f.ang>=45?(f.ctx==='floor'||f.ctx==='unknown'?'FLOOR LEVEL':'LYING ('+f.ctx.toUpperCase()+')'):f.hip>.8?'STANDING':f.hip>.4?'SEATED':'LOW / CROUCHED'}
+function sample(real){let f;const dt=1/CFG.hz;
+ if(!real){const p=S.p;f={t:S.vt,hip:p.hip,ang:p.ang,x:p.x,ctx:p.ctx,moving:p.walk||Math.abs(p.hip-S.hipPrev)/dt>.15,q:1};S.hipPrev=p.hip}
+ else{const g=gray(),cut=!!S.pg&&!sameScene(S.pg,g);S.pg=g;if(cut){MT.reset();S.cyh=[];BUF.f=[];lastBox=null;S.q=1;lg('SCENE CUT: tracker reset (new camera view)')}
+  const m=MT.update(g,S.vt,FSM.s!=='NORMAL'&&!cut,GW);let hip=cut?1:(S.f?S.f.hip:1),ang=cut?0:(S.f?S.f.ang:0),dy=0;
+  if(m.found){hip=m.hip;ang=m.ang;S.cyh.push({t:S.vt,cy:m.cy});while(S.cyh[0].t<S.vt-.8)S.cyh.shift();const o=S.cyh[0];if(S.vt-o.t>=.3)dy=(m.cy-o.cy)/(S.vt-o.t)}
+  S.q=m.found?m.q:S.q*.85;lastBox=m.box;const tum=m.found&&S.q>=.5&&((dy>=.2&&m.m>=.04)||(dy>=.15&&m.m>=.08));
+  f={t:S.vt,hip,ang,x:0,ctx:'unknown',moving:m.moving,q:S.q,dy,m:m.m||0,tumble:tum,cut}}
+ S.f=f;BUF.push(f);S.frames++;S.cost+=Math.min(8,BUF.n)*.00115;
+ const now=performance.now()/1000;S.lastReady=Math.max(S.lastReady+.001,now+CFG.lat*(.85+Math.random()*.3));S.fly.push({f,ready:S.lastReady,sent:now})}
+function deliver(r,now){const f=r.f;
+ if(f.cut){FSM.reset();S.ah=[];S.inc=null;S.fallFlag=false;S.evLast=null;S.pseq=[];S.post='—';S.sec={st:'IDLE'};S.voice={st:'IDLE'};lg('Scene cut: event state reset for the new view')}S.aT=f.t;S.lastT=f.t;S.lat=now-r.sent;
+ S.ah.push({t:f.t,h:f.hip,a:f.ang});while(S.ah[0].t<f.t-4)S.ah.shift();const drop=Math.max(...S.ah.filter(x=>x.t>=f.t-1.5).map(x=>x.h))-f.hip;
+ const po=postureOf(f),out=jev.analyze(f,po,drop);S.json=out;const c=classify(f);
+ {const w={'POTENTIAL FALL':.9,'FALL WITHOUT RECOVERY DETECTED':.9,'POSSIBLE LOSS OF BALANCE':.5,'FALL WITH RECOVERY':.35}[S.ev]||0;for(const k in c.scores)c.scores[k]*=1-w;c.scores['FALLING DOWN']=w*100}
+ for(const k in c.scores)S.sm[k]=(S.sm[k]===undefined?c.scores[k]:S.sm[k]*.5+c.scores[k]*.5);
+ S.top=Object.keys(S.sm).reduce((a,b)=>S.sm[a]>=S.sm[b]?a:b);S.conf=S.sm[S.top];
+ const base=po.startsWith('STANDING')||po==='SEATED'?po:po;
+ if(S.post!==base){if(S.post!=='—'){S.prev=S.post;S.trans=S.post+' → '+base;S.pseq.push(base);if(S.pseq.length>4)S.pseq.shift();S.transMs=Math.round((f.t-S.tStable)*1000);
+   if(base==='SEATED')S.cnt.sit++;if(base==='STANDING')S.cnt.stand++}else S.pseq=[base];S.post=base}
+ if(Math.abs(f.hip-(S.ah.length>1?S.ah[S.ah.length-2].h:f.hip))<.02)S.tStable=f.t;
+ if(f.moving){S.lastMove=f.t;S.inactFired=false}
+ if(f.moving&&f.hip>.8&&!S.wasWalk)S.cnt.walk++;S.wasWalk=f.moving&&f.hip>.8;
+ S.pt[base]=(S.pt[base]||0)+1/CFG.hz;
+ S.desc=(S.pseq.join(' THEN ')+(drop>.5?'; RAPID DESCENT ('+drop.toFixed(2)+' BODY-HEIGHTS IN ≤1.5 S)':f.moving?'; MOVING':'; STILL'));
+ if(f.t-S.lastMove>CFG.inact&&f.ctx!=='sofa'&&!S.inactFired&&FSM.s==='NORMAL'){S.inactFired=true;S.cnt.inact++;newInc({cls:'Unusual inactivity',why:'No significant movement for '+CFG.inact+' s',lv:'YELLOW'})}
+ apply(FSM.step(f,f.t))}
+function newInc(o){const i={id:S.incs.length+1,time:clk(),cls:o.cls,conf:S.conf,desc:o.why,resp:'—',rec:'—',lv:o.lv||FSM.lv,status:'Open',ack:false,res:false,tl:[]};i.tl.push([clk(),o.why]);S.incs.unshift(i);S.inc=i;if(o.fall)S.cnt.fall++;lg('INCIDENT #'+i.id+': '+o.cls);return i}
+const tl=m=>{if(S.inc)S.inc.tl.push([clk(),m]);lg(m)};
+function apply(A){for(const x of A){
+ if(x.a==='open'){newInc({cls:x.cls,why:x.why,lv:FSM.lv,fall:x.fall});if(x.fall){S.fallFlag=true;S.fallT=S.lastT}}
+ else if(x.a==='secondary'){tl('Secondary vision analysis requested on selected frames');S.sec={st:'ANALYZING'};if(S.secT)clearTimeout(S.secT);S.secT=setTimeout(()=>{S.sec=secondary();if(S.inc)S.inc.conf=S.sec.conf*100},2200)}
+ else if(x.a==='ask')ask(x.retry);
+ else if(x.a==='classify'){const nm=S.fallFlag?x.cls:'Floor-level posture; resident reports OK';if(S.inc){S.inc.cls=nm;S.inc.lv=x.lv}tl('Classified: '+nm)}
+ else if(x.a==='recovery'){if(S.inc)S.inc.rec='Resident upright again';tl('Recovery detected');S.voice={st:'IDLE'}}
+ else if(x.a==='close'){if(S.inc){S.inc.status='Auto-closed';S.inc.res=true}tl(x.why);S.inc=null;S.fallFlag=false}
+ else if(x.a==='rearm'){tl('Resident upright again; monitoring re-armed (incident stays open for caregiver)');S.inc=null;S.fallFlag=false}
+ else if(x.a==='notify'){if(!S.inc)newInc({cls:'Possible fall',why:'Manual or system escalation',lv:x.lv});S.inc.lv=x.lv;S.inc.status='Caregiver notified (SIMULATED)';S.notes.unshift([clk(),x.lv,CG.name+' · '+CG.phone,x.why]);tl('Caregiver notification generated (SIMULATED): '+x.why);if(x.lv==='RED')beep()}
+}}
+function speak(t){if(CFG.tts&&'speechSynthesis'in window){try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(t))}catch(e){}}}
+function ask(retry){const id=Date.now();S.voice={st:'ASKING',id,since:performance.now()};const q='Are you alright? Do you need assistance?';tl((retry?'Retry: ':'')+'Voice check-in: “'+q+'”');speak(q);
+ const sc=SC[S.sc];if(S.src==='demo'&&sc.reply&&!retry)setTimeout(()=>{if(S.voice.id===id&&FSM.s==='VOICE')heard(sc.reply.t,true)},sc.reply.d*1000);
+ if(CFG.mic){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(R){try{const r=new R();r.onresult=e=>{if(S.voice.id===id&&FSM.s==='VOICE')heard(e.results[0][0].transcript,false)};r.start()}catch(e){}}}}
+function heard(t,sim){const c=classifyVoice(t);S.voice={st:'HEARD',text:t,cls:c,sim};if(S.inc)S.inc.resp='“'+t+'” → '+c;tl('Resident said “'+t+'”'+(sim?' (SIMULATED)':'')+' → '+c);apply(FSM.respond(c,S.lastT))}
+function beep(){if(!CFG.sound)return;try{const a=new AudioContext(),o=a.createOscillator();o.frequency.value=880;o.connect(a.destination);o.start();o.stop(a.currentTime+.25)}catch(e){}}
+
+/* ---------- Main loop ---------- */
+let lastTs=0;
+function loop(ts){const dt=Math.min(.1,(ts-lastTs)/1000||0);lastTs=ts;const now=performance.now()/1000,real=S.src!=='demo';
+ if(S.run&&!S.paused){
+  if(!real){S.vt+=dt;if(S.vt>=SC[S.sc].d){S.vt=SC[S.sc].d;S.run=false;lg('Scenario ended');$('#playB').textContent='PLAY'}S.p=pose(SC[S.sc],S.vt)}
+  else S.vt+=dt;
+  if(S.vt-S.lastS>=1/CFG.hz){S.lastS=S.vt;sample(real)}}
+ BUF.sec=CFG.buf;
+ while(S.fly.length&&S.fly[0].ready<=now)deliver(S.fly.shift(),now);
+ let box=null;
+ if(!real){S.p=S.p||pose(SC[S.sc],0);box=drawScene(S.p,S.vt)}
+ else{cx.fillStyle='#000';cx.fillRect(0,0,640,360);const vw=vid.videoWidth||640,vh=vid.videoHeight||360,k=Math.min(640/vw,360/vh),dw=vw*k,dh=vh*k,o0=(640-dw)/2,p0=(360-dh)/2;if(vid.readyState>1)cx.drawImage(vid,o0,p0,dw,dh);if(lastBox&&S.run){const s=dw/GW;box=[o0+lastBox[0]*s,p0+lastBox[1]*s,o0+lastBox[2]*s,p0+lastBox[3]*s]}}
+ overlay(box,real);requestAnimationFrame(loop)}
+
+/* ---------- Panels ---------- */
+const tm=(v,l=3)=>pad(Math.floor(v),l);
+function panels(){const lv=S.paused?'YELLOW':FSM.lv;const L=$('#lvl');L.textContent=S.paused?'PAUSED':lv;L.style.color=COL[lv];L.className='pill'+(lv==='RED'?' pulse':'');
+ const lab={GREEN:'NORMAL',YELLOW:'UNUSUAL MOVEMENT / UNCERTAIN',ORANGE:'POSSIBLE FALL · AWAITING CONFIRMATION',RED:'ASSISTANCE REQUESTED · HIGH PRIORITY'}[lv];
+ $('#alertbar').style.borderColor=COL[lv];$('#alertbar').innerHTML='<span style="color:'+COL[lv]+'">'+lv+' — '+lab+'</span><span class="mu">'+(S.inc?'Incident #'+S.inc.id+' · '+S.inc.cls:'No open incident')+(S.inc&&S.inc.lv==='RED'?' · Recommended: call or visit the resident now':'')+'</span>';
+ $('#ana').textContent=S.desc;{const f=S.f||{},C={'NORMAL ACTIVITY':'var(--g)','CONTROLLED DESCENT':'var(--g)','POSSIBLE LOSS OF BALANCE':'var(--y)','POTENTIAL FALL':'var(--o)','FALL WITH RECOVERY':'var(--y)','FALL WITHOUT RECOVERY DETECTED':'var(--r)','INSUFFICIENT VISUAL EVIDENCE':'var(--mu)'};$('#evp').innerHTML=`<span>EVENT</span><span style="color:${C[S.ev]}">${S.ev}</span><span>ACTIVITY</span><span>${S.top}</span><span>BODY POSITION</span><span>${S.post}</span><span>RECOVERY</span><span>${S.fallFlag?(FSM.rec?'RECOVERED':'ON FLOOR '+Math.max(0,S.aT-S.fallT).toFixed(0)+' S'):'—'}</span><span>MODEL CONFIDENCE</span><span>${S.json?S.json.model_confidence:'—'} (demo)</span><span>EVIDENCE QUALITY</span><span>${(f.q===undefined?1:f.q).toFixed(2)}</span>`}
+ const age=S.run?S.vt-S.aT:0;
+ $('#stats').innerHTML=`<span>VIDEO TIME</span><span>${tm(S.vt)} S</span><span>ANALYZED UP TO</span><span>${tm(S.aT)} S (${age>0?'LAG '+age.toFixed(1)+' S':'—'})</span><span>FRAMES SAMPLED</span><span>${tm(S.frames,4)}</span><span>EST. COST (DEMO RATE)</span><span>$${S.cost.toFixed(6)}</span>`;
+ $('#cls').innerHTML=Object.entries(S.sm).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar ${k===S.top?'top':''}"><span>${k}</span><i><b style="width:${v}%"></b></i><span>${v.toFixed(1)}%</span></div>`).join('')+'<div class="mu mono" style="font-size:11px;margin-top:6px">DEMO heuristic scores, normalised across classes. Not calibrated probabilities.</div>'||'—';
+ $('#mov').innerHTML=`<span>CURRENT</span><span>${S.post}</span><span>PREVIOUS</span><span>${S.prev}</span><span>TRANSITION</span><span>${S.trans}${S.transMs!==undefined?' · '+S.transMs+' MS (±'+Math.round(1000/CFG.hz)+')':''}</span><span>SINCE LAST MOVEMENT</span><span>${Math.max(0,S.aT-S.lastMove).toFixed(1)} S</span><span>RECOVERY</span><span>${FSM.rec?'DETECTED':'—'}</span>`;
+ const st=['NORMAL','UNUSUAL','POSSIBLE_FALL','SECONDARY','VOICE','CLASSIFIED','NOTIFIED'];
+ $('#fsm').innerHTML=st.map(s=>`<span style="color:${s===FSM.s?COL[FSM.lv]:'var(--mu)'}">${s===FSM.s?'▶ ':'  '}${s.replace('_',' ')}</span>`).join('<br>');
+ const v=S.voice;$('#voice').innerHTML=v.st==='ASKING'?`ASKING — “Are you alright? Do you need assistance?”<br><span class="mu">Timeout ${CFG.timeout} s · escalation not blocked by voice</span>`:v.st==='HEARD'?`HEARD${v.sim?' (SIMULATED)':''}: “${v.text}”<br>→ ${v.cls}`:'IDLE'+(CFG.voice?'':' · voice check-in disabled');
+ const s=S.sec;$('#sec').innerHTML=s.st==='IDLE'?'IDLE':s.st==='ANALYZING'?'ANALYZING selected frames…':`READY (DEMO)<br>POSITION: ${s.pos}<br>SEQUENCE: ${s.seq}<br>INTERPRETATION: ${s.interp}<br>CONFIDENCE: ${s.conf.toFixed(2)} · HUMAN CONFIRMATION ${s.human?'NEEDED':'—'}`;
+ $('#mdl').innerHTML=`<span>PRIMARY · JEV</span><span>${CFG.jev} (no credentials)</span><span>SECONDARY</span><span>${s.st}</span><span>FRAME BUFFER</span><span>${CFG.buf.toFixed(1)} S · ${BUF.n} FRAMES · ${BUF.dur.toFixed(1)} S HELD</span><span>SAMPLING</span><span>${S.paused?'PAUSED':S.run?'ACTIVE @ '+CFG.hz+' HZ':'IDLE'}</span><span>LATENCY</span><span>${S.lat.toFixed(1)} S (configured ${CFG.lat})</span><span>QUEUE</span><span>${S.fly.length} TASKS</span><span>MODEL CONFIDENCE</span><span>${S.json?S.json.confidence:'—'}</span>`;
+ $('#clock').textContent='VIDEO '+S.vt.toFixed(1)+' S · ANALYZED '+S.aT.toFixed(1)+' S · EVIDENCE: '+(S.inc?'held temporarily (retention '+CFG.buf+' s buffer)':'none retained');
+ const b=$('#bs'),c=b.getContext('2d');c.clearRect(0,0,640,26);c.strokeStyle='#24282b';c.strokeRect(.5,.5,639,25);
+ for(const f of BUF.f){const x=(f.t-(S.vt-BUF.sec))/BUF.sec*640;if(f.t<=S.aT){c.fillStyle='#3ddc84';c.fillRect(x,4,3,18)}else{c.strokeStyle='#f5c542';c.strokeRect(x+.5,4.5,2,17)}}
+ $('#bsT').textContent=BUF.n+' frames · '+BUF.dur.toFixed(1)+' of '+CFG.buf+' s · green = analyzed, amber = waiting on model';
+ $('#json').textContent=S.json?JSON.stringify(S.json,null,1):'—';
+ $('#log').innerHTML=S.log.map(l=>`<div><span class="mu">${l[0]}</span> ${l[1]}</div>`).join('')||'<span class="mu">No events yet. Press PLAY.</span>'}
+
+/* ---------- Pages ---------- */
+const bars=(o,fmt=v=>v)=>{const m=Math.max(1,...Object.values(o));return Object.entries(o).map(([k,v])=>`<div class="bar"><span>${k}</span><i><b style="width:${v/m*100}%"></b></i><span>${fmt(v)}</span></div>`).join('')||'<span class="mu">No data yet. Run a scenario.</span>'};
+function incCards(){return S.incs.map(i=>`<div class="card" style="border-left-color:${COL[i.lv]}"><b class="mono">#${i.id} · ${i.time} · ${i.cls}</b> <span class="pill" style="color:${COL[i.lv]};font-size:11px">${i.lv}</span>
+ <div class="mono mu" style="margin-top:4px">CONF ${i.conf.toFixed(0)}% (demo) · RESPONSE ${i.resp} · RECOVERY ${i.rec} · ${i.res?'RESOLVED':i.ack?'ACKNOWLEDGED':i.status}</div>
+ <div style="margin-top:4px">${i.desc}</div><div class="tl">${i.tl.map(t=>t[0]+' — '+t[1]).join('<br>')}</div>
+ <div class="row"><button onclick="ackInc(${i.id})" ${i.ack?'disabled':''}>ACKNOWLEDGE</button><button onclick="resInc(${i.id})" ${i.res?'disabled':''}>MARK RESOLVED</button></div></div>`).join('')||'<p class="mu">No incidents. Run scenario 4, 5, 6 or 7 to generate events.</p>'}
+const ackInc=id=>{const i=S.incs.find(x=>x.id===id);i.ack=true;i.tl.push([clk(),'Acknowledged by caregiver']);page()};
+const resInc=id=>{const i=S.incs.find(x=>x.id===id);i.res=true;i.ack=true;i.tl.push([clk(),'Marked resolved by caregiver']);if(S.inc===i){FSM.resolve();S.inc=null;S.fallFlag=false}page()};
+function page(){const v=S.view;
+ if(v==='act')$('#v-act').innerHTML=`<div class="pn"><h3>Time per posture · this session (analyzed frames)</h3>${bars(S.pt,x=>x.toFixed(0)+' s')}</div><div class="pn"><h3>Mobility counters</h3><div class="kv"><span>WALKING EVENTS</span><span>${S.cnt.walk}</span><span>SITTING TRANSITIONS</span><span>${S.cnt.sit}</span><span>STANDING TRANSITIONS</span><span>${S.cnt.stand}</span></div><p class="mu">Movement patterns only. Not used to diagnose medical conditions.</p></div><div class="pn"><h3>Modules</h3><div class="kv"><span>UNUSUAL INACTIVITY</span><span>ACTIVE · threshold ${CFG.inact} s</span><span>WANDERING / ZONE</span><span>ZONE DRAWN IN DEMO · EXIT ALERT NOT IMPLEMENTED</span><span>NIGHTTIME MONITORING</span><span>NOT IMPLEMENTED · needs time-of-day data</span></div></div>`;
+ if(v==='inc')$('#v-inc').innerHTML=incCards();
+ if(v==='cg')$('#v-cg').innerHTML=`<div class="pn"><h3>Emergency contact</h3>${['name','phone','email','esc'].map(k=>`<label>${{name:'NAME',phone:'PHONE',email:'EMAIL',esc:'ESCALATE AFTER (MIN)'}[k]}<input value="${CG[k]}" oninput="CG['${k}']=this.value"></label>`).join('')}<p class="mu">Notifications are simulated. No SMS, call or emergency service is contacted.</p></div><div class="pn"><h3>Notification log (SIMULATED)</h3><table>${S.notes.map(n=>`<tr><td>${n[0]}</td><td style="color:${COL[n[1]]}">${n[1]}</td><td>${n[2]}</td><td>${n[3]}</td></tr>`).join('')||'<tr><td class="mu">None sent.</td></tr>'}</table></div><div class="pn"><h3>Open incidents</h3>${incCards()}</div>`;
+ if(v==='rep'){const c=S.cnt;$('#v-rep').innerHTML=`<div class="pn"><h3>Daily activity report · this session (DEMO events)</h3>${bars({'Walking events':c.walk,'Sitting transitions':c.sit,'Standing transitions':c.stand,'Potential fall events':c.fall,'Unusual inactivity':c.inact})}<p class="mu">Counts come from analyzed demo frames. Weekly trends need persistent storage, which this prototype does not include.</p></div>`}
+ if(v==='set')setPage()}
+function setPage(){const n=(k,l,min,max,st)=>`<label>${l}<input type="number" min="${min}" max="${max}" step="${st}" value="${CFG[k]}" onchange="CFG.${k}=+this.value;FSM.o.timeout=CFG.timeout"></label>`,t=(k,l)=>`<label>${l}<input type="checkbox" ${CFG[k]?'checked':''} onchange="CFG.${k}=this.checked;FSM.o.voice=CFG.voice"></label>`;
+ $('#v-set').innerHTML=`<div class="pn"><h3>Sampling and buffer</h3>${n('hz','SAMPLING FREQUENCY (HZ)',.5,5,.5)}${n('buf','ROLLING BUFFER (S)',5,60,1)}${n('lat','SIMULATED MODEL LATENCY (S)',.2,6,.1)}${n('inact','INACTIVITY THRESHOLD (S)',10,600,10)}</div>
+ <div class="pn"><h3>Models</h3><label>PRIMARY<select onchange="CFG.jev=this.value==='Simulated'?'SIMULATED':'OFFLINE'"><option>Simulated</option><option>Jev HTTP adapter (not connected)</option></select></label><p class="mu">Jev and the secondary vision model are not called. Replace jev.analyze() with an adapter that talks to your own backend. API keys belong in server environment variables, never in browser code.</p></div>
+ <div class="pn"><h3>Voice and alerts</h3>${t('voice','VOICE CHECK-IN')}${t('tts','SPOKEN PROMPT (TTS)')}${t('mic','USE MICROPHONE (SPEECH-TO-TEXT)')}${n('timeout','RESPONSE TIMEOUT (S)',3,60,1)}${t('sound','AUDIBLE ALERTS')}</div>
+ <div class="pn"><h3>Privacy</h3><p class="mu">No continuous recording: only the rolling buffer is held in memory. Evidence is kept only while an incident is open, then discarded. Monitoring can be paused at any time. Consent and caregiver authorization, authentication and role-based access need a server and are not implemented here.</p></div>
+ <div class="pn"><h3>Self-tests</h3><button onclick="runTests()">RUN TESTS</button><pre id="tout" class="mono" style="white-space:pre-wrap"></pre></div>`}
+
+/* ---------- Self-tests ---------- */
+function runTests(){const R=[],ok=(n,c)=>R.push((c?'PASS ':'FAIL ')+n);
+ const fd=(f,s,t)=>f.step(Object.assign({moving:false},s),t);
+ let b=new FrameBuffer(20);for(let i=0;i<50;i++)b.push({t:i*.5});ok('buffer expires frames older than 20 s',b.f[0].t===4.5&&b.dur===20&&b.n===41);
+ ok('classify walking',classify({hip:1,ang:0,moving:true,ctx:'floor'}).top==='WALKING');
+ ok('classify sitting',classify({hip:.55,ang:0,moving:false,ctx:'chair'}).top==='SITTING');
+ ok('classify lying on sofa is not a fall',classify({hip:.42,ang:88,moving:false,ctx:'sofa'}).top==='LYING DOWN');
+ ok('classify floor posture',classify({hip:.12,ang:88,moving:false,ctx:'floor'}).top==='FLOOR LEVEL');
+ let f=new Fsm({timeout:8,voice:true});fd(f,{hip:1,ang:0,ctx:'floor'},0);fd(f,{hip:1,ang:0,ctx:'floor'},1);fd(f,{hip:.12,ang:88,ctx:'floor'},1.5);const s1=f.s;fd(f,{hip:.12,ang:88,ctx:'floor'},2.2);const s2=f.s;fd(f,{hip:.12,ang:88,ctx:'floor'},5);const s3=f.s;fd(f,{hip:.12,ang:88,ctx:'floor'},14);
+ ok('fall: POSSIBLE_FALL → SECONDARY → VOICE → NOTIFIED(RED) on no response',s1==='POSSIBLE_FALL'&&s2==='SECONDARY'&&s3==='VOICE'&&f.s==='NOTIFIED'&&f.lv==='RED');
+ f=new Fsm({});[[0,1],[1,1],[1.5,.12]].forEach(([t,h])=>fd(f,{hip:h,ang:88,ctx:'floor'},t));fd(f,{hip:.12,ang:88,ctx:'floor'},2.2);fd(f,{hip:1,ang:0,ctx:'floor'},4);
+ ok('recovery detected before voice response',f.s==='CLASSIFIED'&&f.rec);
+ f=new Fsm({});[[0,1],[1,.9],[2,.8],[3,.6],[4,.45],[5,.3],[6,.25]].forEach(([t,h])=>fd(f,{hip:h,ang:60,ctx:'floor'},t));const u=f.s;fd(f,{hip:.12,ang:85,ctx:'floor'},8.5);
+ ok('ambiguous slow descent: UNUSUAL then SECONDARY',u==='UNUSUAL'&&f.s==='SECONDARY');
+ f=new Fsm({});fd(f,{hip:1,ang:0,ctx:'floor'},0);fd(f,{hip:.42,ang:88,ctx:'sofa'},.5);fd(f,{hip:.42,ang:88,ctx:'sofa'},5);ok('lying on sofa stays NORMAL',f.s==='NORMAL'&&f.lv==='GREEN');
+ ok('voice: need help',classifyVoice('I need help')==='NEEDS_ASSISTANCE'&&classifyVoice('please call someone')==='NEEDS_ASSISTANCE');
+ ok('voice: okay',classifyVoice('I’m fine')==='CONFIRMED_OKAY'&&classifyVoice('I just sat down')==='CONFIRMED_OKAY'&&classifyVoice("I don't need help")==='CONFIRMED_OKAY');
+ ok('voice: unclear and empty',classifyVoice('banana')==='UNCLEAR'&&classifyVoice('')==='NO_RESPONSE');
+ f=new Fsm({});f.s='VOICE';let A=f.respond('NEEDS_ASSISTANCE',3);ok('escalation: help request → RED notify',f.lv==='RED'&&A.some(a=>a.a==='notify'));
+ f=new Fsm({});f.s='VOICE';f.respond('UNCLEAR',3);const retry=f.s==='VOICE';f.respond('UNCLEAR',6);ok('unclear: retry once then ORANGE escalation',retry&&f.s==='NOTIFIED'&&f.lv==='ORANGE');
+ f=new Fsm({});f.s='NOTIFIED';f.lv='RED';f.ts=0;fd(f,{hip:1,ang:0,ctx:'floor'},1);fd(f,{hip:1,ang:0,ctx:'floor'},7);ok('after recovery from NOTIFIED, monitoring re-arms',f.s==='NORMAL');
+ {const mt=new MotionTracker(),fs=new Fsm({}),g=(x,y,w,h)=>{const a=new Float32Array(5184).fill(50);for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)a[j*96+i]=200;return a};
+  let t=0,walk=0,tot=0;const seen=[];const run=a=>{const m=mt.update(a,t),l=seen[seen.length-1]||{hip:1,ang:0},f={t,hip:m.found?m.hip:l.hip,ang:m.found?m.ang:l.ang,ctx:'unknown',moving:m.moving};seen.push(f);fs.step(f,t);t+=.5;return f};
+  run(g(0,0,0,0));run(g(0,0,0,0));
+  for(let i=0;i<16;i++){const f=run(g(8+i*4,20,6,26));if(i>2){tot++;if(classify(f).top==='WALKING')walk++}}
+  ok('real pipeline: synthetic walker classified WALKING',walk>=tot*.8);
+  for(const a of [g(68,32,10,20),g(66,38,16,12)])run(a);for(let i=0;i<6;i++)run(g(64,44,22,8));
+  ok('real pipeline: synthetic fall triggers the fall state machine',['POSSIBLE_FALL','SECONDARY','VOICE','NOTIFIED'].includes(fs.s));}
+ const mkG=(x,y,w,h)=>{const a=new Float32Array(5184).fill(50);for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)a[j*96+i]=200;return a};
+ const sim=fr=>{const mt=new MotionTracker(),fs=new Fsm({timeout:8}),out=[];let t=0,l={hip:1,ang:0,q:1};for(const a of fr){const m=mt.update(a,t,fs.s!=='NORMAL'),f={t,hip:m.found?m.hip:l.hip,ang:m.found?m.ang:l.ang,q:m.found?m.q:l.q*.85,ctx:'unknown',moving:m.moving};l=f;fs.step(f,t);out.push({f,s:fs.s});t+=.5}return out};
+ {const pre=[mkG(0,0,0,0),mkG(0,0,0,0)],wk=Array.from({length:16},(_,i)=>mkG(8+i*4,20,6,26));
+  let o=sim([...pre,...wk,mkG(68,32,10,20),mkG(66,38,16,12),...Array(40).fill(mkG(64,44,22,8))]),L=o[o.length-1];
+  ok('person held on floor 20 s stays low (no reference drift) and event stays active',L.f.hip<.5&&L.f.ang>=45&&L.s!=='NORMAL');
+  o=sim([...pre,...wk,...Array.from({length:8},(_,i)=>mkG(68,28+i,6+i,(26-i*1.2)|0)),...Array(10).fill(mkG(68,36,13,17))]);
+  ok('bending forward is not a fall',o[o.length-1].s==='NORMAL');
+  o=sim([...pre,...wk,...Array(8).fill(mkG(0,0,0,0))]);ok('person leaving frame lowers evidence quality instead of guessing',o[o.length-1].f.q<.5&&o[o.length-1].s==='NORMAL');}
+ {const a=Float32Array.from({length:5184},(_,i)=>i%97),b=Float32Array.from({length:5184},(_,i)=>(i*7919)%251);ok('scene-cut detector: same scene true, different scene false',sameScene(a,a.map(x=>x+3))&&!sameScene(a,b))}
+ f=new Fsm({});{const u={hip:1,ang:0,ctx:'unknown',q:1,dy:.4,tumble:true};fd(f,u,0);const t1=f.s;fd(f,{...u,tumble:false},.6);fd(f,{...u,tumble:false,dy:.02},1.5);ok('tumble triggers fall state; upright bounding box alone is not recovery',t1==='POSSIBLE_FALL'&&f.s!=='CLASSIFIED')}
+ const txt=R.join('\n')+'\n\n'+R.filter(r=>r[0]==='P').length+'/'+R.length+' passed';const o=$('#tout');if(o)o.textContent=txt;return txt}
+
+/* ---------- Wiring ---------- */
+const NAV=[['mon','OVERVIEW'],['live','LIVE MONITORING'],['act','ACTIVITY'],['inc','INCIDENTS'],['cg','CAREGIVERS'],['rep','REPORTS'],['set','SETTINGS']];
+$('#nav').innerHTML=NAV.map(n=>`<button data-v="${n[0]}">${n[1]}</button>`).join('');
+$('#nav').onclick=e=>{const v=e.target.dataset.v;if(!v)return;S.view=v;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+ document.querySelectorAll('.v').forEach(s=>s.classList.toggle('on',s.id==='v-'+(v==='live'?'mon':v)));$('#liveX').style.display=v==='live'?'block':'none';$('#alertbar').style.display=v==='mon'||v==='live'?'flex':'none';page()};
+document.querySelector('[data-v=mon]').classList.add('on');
+$('#scn').innerHTML=Object.entries(SC).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('');
+function reset(){MT.reset();lastBox=null;BUF.f=[];FSM.reset();Object.assign(S,{cyh:[],pg:null,evSeen:new Set(),ev:'NORMAL ACTIVITY',fallFlag:false,fallT:0,evLast:null,q:1,vt:0,lastS:-9,frames:0,cost:0,fly:[],sm:{},top:'—',json:null,desc:'AWAITING FRAMES',pseq:[],post:'—',prev:'—',trans:'—',transMs:undefined,aT:0,lastMove:0,inc:null,sec:{st:'IDLE'},voice:{st:'IDLE'},ah:[],hipPrev:1,p:null,inactFired:false});S.pt={};if(S.src==='demo')S.p=pose(SC[S.sc],0)}
+$('#scn').onchange=e=>{S.sc=e.target.value;S.run=false;$('#playB').textContent='PLAY';S.cnt={walk:0,sit:0,stand:0,fall:0,inact:0};reset();lg('Scenario: '+SC[S.sc].n)};
+$('#rstB').onclick=()=>{S.run=false;reset();$('#playB').textContent='PLAY';if(S.src!=='demo')vid.currentTime=0};
+$('#playB').onclick=()=>{if(S.src!=='demo'&&!vid.src&&!vid.srcObject){$('#srcMsg').textContent='Choose a source first.';return}
+ S.run=!S.run;$('#playB').textContent=S.run?'PAUSE':'PLAY';if(S.src!=='demo'){S.run?vid.play():vid.pause()}if(S.run&&S.vt>=(S.src==='demo'?SC[S.sc].d:1e9)){reset()}if(S.run)lg('Monitoring started · '+(S.src==='demo'?SC[S.sc].n:S.src.toUpperCase()))};
+$('#pauseB').onclick=()=>{S.paused=!S.paused;$('#pauseB').textContent=S.paused?'RESUME MONITORING':'PAUSE MONITORING';lg(S.paused?'Monitoring paused by user':'Monitoring resumed')};
+$('#vOk').onclick=()=>{if(FSM.s==='VOICE')heard('I’m fine',false);else lg('No active voice check-in')};
+$('#vHelp').onclick=()=>{if(FSM.s==='VOICE')heard('I need help',false);else lg('No active voice check-in')};
+$('#vMan').onclick=()=>{const A=[];if(!S.inc)apply([{a:'open',cls:'Manual assistance request',why:'Resident pressed assistance button'}]);apply(FSM.notify(S.lastT,A,'Manual assistance button pressed','RED','MANUAL'))};
+$('#src').onchange=async e=>{S.run=false;$('#playB').textContent='PLAY';S.src=e.target.value;CFG.hz=S.src==='demo'?2:10;CFG.lat=S.src==='demo'?1.8:.4;FSM.o.voice=CFG.voice&&S.src==='demo';$('#srcMsg').textContent='';vid.pause();vid.srcObject=null;vid.removeAttribute('src');MT.reset();lastBox=null;
+ $('#camTitle').textContent={demo:'CAM 01 · LIVING ROOM · DEMO',upload:'UPLOADED VIDEO',cam:'WEBCAM'}[S.src];$('#scn').style.display=S.src==='demo'?'':'none';
+ if(S.src==='upload')$('#file').click();
+ if(S.src==='cam'){try{vid.srcObject=await navigator.mediaDevices.getUserMedia({video:true});await vid.play();vid.pause()}catch(err){$('#srcMsg').textContent='Webcam unavailable ('+(err.name||'error')+'). Use an uploaded video or demo scenario.';S.src='demo';$('#src').value='demo';$('#scn').style.display=''}}
+ reset()};
+$('#file').onchange=e=>{const f=e.target.files[0];if(f){vid.src=URL.createObjectURL(f);vid.load();$('#srcMsg').textContent=f.name+' · analysed with local motion heuristic, then simulated Jev'}reset()};
+reset();$('#scn').style.display='';{const tr=runTests(),m=tr.match(/(\d+)\/(\d+) passed/);$('#tbadge').textContent='SELF-TEST '+m[1]+'/'+m[2];$('#tbadge').style.color=m[1]===m[2]?'var(--g)':'var(--r)';$('#prm').textContent=JEV_PROMPT}
+setInterval(()=>{panels();if(S.view!=='mon'&&S.view!=='live'&&S.view!=='set'&&S.run)page()},300);
+requestAnimationFrame(loop);panels();
+</script></body></html>
